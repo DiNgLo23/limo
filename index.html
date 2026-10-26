@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="LiMo — iOS-приложение: карта коротких видео, снятых рядом. Что происходит вокруг прямо сейчас.">
+<meta property="og:title" content="LiMo">
+<meta property="og:description" content="LiMo — iOS-приложение: карта коротких видео, снятых рядом. Что происходит вокруг прямо сейчас.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9.5' fill='none' stroke='%231D5BFF' stroke-width='2.5'/%3E%3Ccircle cx='12' cy='12' r='4' fill='%231D5BFF'/%3E%3C/svg%3E">
+<title>LiMo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Martian+Mono:wght@400;500&family=Unbounded:wght@500;600;700&display=swap">
+<style>
+/* Layout: map-paper ground; hero = live map inside a phone; sequences drawn as routes; GPS-blue is the one accent, REC-red only marks "recording" */
+:root{
+  --paper:#EDF0EA; --surface:#F7F9F5; --block:#E1E6DE; --road:#FFFFFF; --park:#D2E3C7; --water:#C5D9E6;
+  --ink:#15212B; --ink-2:#4B5966; --line:#D1D8D1;
+  --accent:#1D5BFF; --accent-ink:#FFFFFF; --accent-soft:rgba(29,91,255,.12);
+  --live:#E8432F; --bezel:#0B0F14; --pin-ring:#FFFFFF;
+  --v1:linear-gradient(160deg,#8CC0FF 0%,#2A50C4 100%);
+  --v2:linear-gradient(160deg,#FFB878 0%,#D2452C 100%);
+  --v3:linear-gradient(160deg,#A6E3B8 0%,#2E7B57 100%);
+  --v4:linear-gradient(160deg,#F1C8E2 0%,#7E4CAE 100%);
+  --v5:linear-gradient(160deg,#FFE292 0%,#DC8620 100%);
+  --f-display:"Unbounded","Arial Black",system-ui,sans-serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"Martian Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --gutter:clamp(16px,4vw,40px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0C1218; --surface:#121A22; --block:#16202A; --road:#1E2935; --park:#13251A; --water:#102230;
+    --ink:#E5ECF1; --ink-2:#93A1AE; --line:#24313C;
+    --accent:#5E8DFF; --accent-ink:#06101F; --accent-soft:rgba(94,141,255,.16);
+    --live:#FF5A46; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0C1218; --surface:#121A22; --block:#16202A; --road:#1E2935; --park:#13251A; --water:#102230;
+  --ink:#E5ECF1; --ink-2:#93A1AE; --line:#24313C;
+  --accent:#5E8DFF; --accent-ink:#06101F; --accent-soft:rgba(94,141,255,.16);
+  --live:#FF5A46; color-scheme:dark;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion: no-preference){html{scroll-behavior:smooth}}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 17px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:31;background:var(--paper)}
+a{color:inherit}
+p{margin:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
+::selection{background:var(--accent);color:var(--accent-ink)}
+
+.wrap{max-width:1160px;margin-inline:auto;padding-left:max(var(--gutter),env(safe-area-inset-left,0px));padding-right:max(var(--gutter),env(safe-area-inset-right,0px))}
+
+h1,h2{font-family:var(--f-display);font-weight:600;letter-spacing:-.015em;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.05rem,1.1rem + 3.4vw,3.5rem);line-height:1.06}
+h2{font-size:clamp(1.45rem,1.05rem + 1.7vw,2.25rem);line-height:1.16}
+h3{font:600 1.12rem/1.3 var(--f-body);margin:0;text-wrap:balance}
+.lead{font-size:clamp(1.05rem,1rem + .3vw,1.2rem);color:var(--ink-2);max-width:34em}
+.kicker{display:flex;align-items:center;gap:10px;font:500 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0}
+.kicker::before{content:"";width:6px;height:6px;border-radius:50%;border:2px solid currentColor}
+
+/* nav */
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;background:var(--paper);background:color-mix(in srgb,var(--paper) 86%,transparent);-webkit-backdrop-filter:saturate(1.2) blur(12px);backdrop-filter:saturate(1.2) blur(12px);border-bottom:1px solid var(--line)}
+.nav-in{display:flex;align-items:center;gap:24px;height:64px}
+.logo{display:flex;align-items:center;gap:10px;font:700 19px/1 var(--f-display);letter-spacing:-.01em;text-decoration:none}
+.logo svg{width:24px;height:24px;flex:none}
+.links{display:flex;gap:2px;margin-left:auto}
+.links a{text-decoration:none;font-size:15px;color:var(--ink-2);padding:8px 12px;border-radius:999px;transition:color .15s,background .15s}
+.links a:hover{color:var(--ink)}
+.links a[aria-current]{color:var(--ink);background:var(--accent-soft)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:10px;font:600 16px/1 var(--f-body);text-decoration:none;padding:16px 24px;border-radius:999px;background:var(--accent);color:var(--accent-ink);border:2px solid var(--accent);transition:transform .15s,box-shadow .15s,border-color .15s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 10px 22px -10px var(--accent)}
+.btn-ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn-ghost:hover{border-color:var(--ink);box-shadow:none}
+.btn-sm{padding:11px 18px;font-size:14px}
+.btn svg{width:18px;height:18px}
+
+/* hero */
+.hero{position:relative;overflow:hidden;isolation:isolate}
+.hero-map{position:absolute;inset:0;width:100%;height:100%;z-index:-2;-webkit-mask-image:linear-gradient(100deg,transparent 22%,#000 64%);mask-image:linear-gradient(100deg,transparent 22%,#000 64%)}
+.hero::after{content:"";position:absolute;left:0;right:0;bottom:0;height:140px;background:linear-gradient(to bottom,transparent,var(--paper));z-index:-1}
+.m-bg{fill:var(--paper)}
+.m-block{fill:var(--block)}
+.m-park{fill:var(--park)}
+.m-water{fill:none;stroke:var(--water);stroke-width:46;stroke-linecap:round}
+.m-road{fill:none;stroke:var(--road);stroke-width:16;stroke-linecap:round}
+.m-road-s{fill:none;stroke:var(--road);stroke-width:8;stroke-linecap:round}
+.hero-in{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:clamp(32px,5vw,72px);align-items:center;padding-block:clamp(48px,7vw,96px) clamp(64px,8vw,112px)}
+.hero-copy{display:grid;gap:24px;min-width:0}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;justify-self:start;font:500 12.5px/1 var(--f-mono);color:var(--ink-2);background:var(--surface);border:1px solid var(--line);padding:9px 14px;border-radius:999px}
+.rec{width:8px;height:8px;border-radius:50%;background:var(--live);flex:none}
+.cta-row{display:flex;flex-wrap:wrap;gap:12px}
+.coords{font:400 12px/1.4 var(--f-mono);color:var(--ink-2);letter-spacing:.02em}
+.phone-col{display:grid;justify-items:center;gap:14px;min-width:0}
+.phone-cap{font:400 11px/1 var(--f-mono);color:var(--ink-2)}
+
+/* phone */
+.phone{width:min(300px,100%);aspect-ratio:300/620;padding:10px;border-radius:48px;background:var(--bezel);box-shadow:0 40px 80px -30px rgba(10,25,45,.45),0 0 0 1px var(--line)}
+.screen{position:relative;width:100%;height:100%;border-radius:38px;overflow:hidden;container-type:inline-size;background:var(--paper)}
+.map{position:absolute;inset:0;width:100%;height:100%}
+.map .m-water{stroke-width:26}
+.map .m-road{stroke-width:11}
+.map .m-road-s{stroke-width:5.5}
+.radius{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.5;stroke-dasharray:4 5}
+.island{position:absolute;top:2.6cqw;left:50%;width:29cqw;height:8.4cqw;margin-left:-14.5cqw;border-radius:5cqw;background:var(--bezel);z-index:3}
+.status{position:absolute;top:0;left:0;right:0;height:13.5cqw;display:flex;justify-content:space-between;align-items:center;padding:0 7.5cqw;font:600 4cqw/1 var(--f-body);color:var(--ink);z-index:2}
+.status svg{width:13cqw;height:4cqw}
+.search{position:absolute;top:15cqw;left:5cqw;right:5cqw;height:11.5cqw;display:flex;align-items:center;gap:2.4cqw;padding:0 2cqw 0 4cqw;border-radius:6cqw;background:var(--surface);box-shadow:0 1.5cqw 5cqw rgba(10,25,45,.14);font:500 3.9cqw/1 var(--f-body);color:var(--ink);z-index:2}
+.search svg{width:4.4cqw;height:4.4cqw;flex:none;color:var(--ink-2)}
+.search .r{margin-left:auto;font:500 3cqw/1 var(--f-mono);color:var(--accent);background:var(--accent-soft);padding:2.2cqw 2.8cqw;border-radius:4cqw}
+.me{position:absolute;left:50%;top:48.4%;width:5.6cqw;height:5.6cqw;margin:-2.8cqw 0 0 -2.8cqw;border-radius:50%;background:var(--accent);border:1.1cqw solid var(--pin-ring);box-shadow:0 1cqw 3cqw rgba(10,25,45,.3);z-index:1}
+.me::after{content:"";position:absolute;inset:-1.1cqw;border-radius:50%;border:.6cqw solid var(--accent);animation:pulse 2.4s ease-out infinite}
+.pin{position:absolute;transform:translate(-50%,-100%);z-index:1}
+.pin-in{display:flex;flex-direction:column;align-items:center;transform-origin:50% 100%;animation:life 12s ease-in-out infinite}
+.thumb{position:relative;width:13cqw;height:16cqw;border-radius:3.6cqw;border:.9cqw solid var(--pin-ring);background:var(--v1);box-shadow:0 1.2cqw 3.5cqw rgba(10,25,45,.28)}
+.thumb::after{content:"";position:absolute;left:50%;top:50%;margin:-1.8cqw 0 0 -1cqw;border-style:solid;border-width:1.8cqw 0 1.8cqw 3cqw;border-color:transparent transparent transparent rgba(255,255,255,.92)}
+.tail{width:0;height:0;border-style:solid;border-width:2cqw 1.8cqw 0 1.8cqw;border-color:var(--pin-ring) transparent transparent transparent;margin-top:-.2cqw}
+.t{position:absolute;top:-2.4cqw;right:-6cqw;font:500 2.5cqw/1 var(--f-mono);white-space:nowrap;color:var(--paper);background:var(--ink);padding:1.2cqw 1.6cqw;border-radius:3cqw}
+.sheet{position:absolute;left:0;right:0;bottom:0;padding:3cqw 5cqw 7cqw;border-radius:6cqw 6cqw 0 0;background:var(--surface);box-shadow:0 -2cqw 7cqw rgba(10,25,45,.14);z-index:2}
+.grab{width:11cqw;height:1.3cqw;border-radius:1cqw;background:var(--line);margin:0 auto 3.4cqw}
+.sheet-h{display:flex;justify-content:space-between;align-items:baseline;gap:2cqw}
+.sheet-h b{font:600 4.6cqw/1.1 var(--f-body);color:var(--ink)}
+.sheet-h span{font:400 2.8cqw/1 var(--f-mono);color:var(--ink-2)}
+.clips{display:grid;grid-template-columns:1fr 1fr;gap:3cqw;margin-top:3.4cqw}
+.ct{position:relative;aspect-ratio:4/3;border-radius:3cqw;background:var(--v1)}
+.ct::after{content:"";position:absolute;left:50%;top:50%;margin:-2.2cqw 0 0 -1.2cqw;border-style:solid;border-width:2.2cqw 0 2.2cqw 3.6cqw;border-color:transparent transparent transparent rgba(255,255,255,.92)}
+.clip b{display:block;margin-top:2cqw;font:600 3.4cqw/1.25 var(--f-body);color:var(--ink)}
+.clip span{display:block;margin-top:.8cqw;font:400 2.6cqw/1.3 var(--f-mono);color:var(--ink-2)}
+@keyframes life{
+  0%{transform:scale(0);opacity:0}
+  5%{transform:scale(1.1);opacity:1}
+  9%{transform:scale(1)}
+  80%{transform:scale(1);opacity:1}
+  90%{transform:scale(.8);opacity:0}
+  100%{transform:scale(.8);opacity:0}
+}
+@keyframes pulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(3.4);opacity:0}}
+
+/* sections */
+.sec{padding-block:clamp(72px,9vw,128px);scroll-margin-top:64px}
+.band{background:var(--surface)}
+.sec-head{display:grid;gap:16px;max-width:780px;margin-bottom:clamp(36px,5vw,56px)}
+.sec-head p:not(.kicker){color:var(--ink-2);font-size:1.08rem;max-width:40em}
+
+/* problem */
+.split{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(32px,6vw,96px);align-items:start}
+.split-h{position:sticky;top:calc(env(safe-area-inset-top,0px) + 96px);display:grid;gap:18px}
+.points{display:grid}
+.points article{display:grid;gap:10px;padding-block:28px;border-top:1px solid var(--line)}
+.points article:last-child{border-bottom:1px solid var(--line)}
+.points p{color:var(--ink-2);max-width:36em}
+
+/* how */
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px}
+.steps li{position:relative;display:grid;gap:14px;align-content:start}
+.steps li:not(:last-child)::after{content:"";position:absolute;top:17px;left:48px;right:-22px;border-top:2px dashed var(--accent);opacity:.5}
+.n{width:36px;height:36px;border-radius:50%;border:2px solid var(--accent);display:grid;place-items:center;font:500 13px/1 var(--f-mono);color:var(--accent);background:var(--surface)}
+.steps p{color:var(--ink-2);font-size:16px}
+
+/* layers */
+.layers{display:grid;border-top:1px solid var(--line)}
+.layer{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,230px);gap:clamp(20px,4vw,48px);align-items:center;padding-block:32px;border-bottom:1px solid var(--line)}
+.scale{width:120px;height:120px;display:block}
+.scale .ring{fill:none;stroke:var(--line);stroke-width:1.5;stroke-dasharray:3 4}
+.scale .on{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2;stroke-dasharray:none}
+.scale .c{fill:var(--accent)}
+.zl{font:500 12px/1 var(--f-mono);color:var(--ink-2);letter-spacing:.04em}
+.layer h3{font:600 1.35rem/1.2 var(--f-display);margin:8px 0}
+.layer p.d{color:var(--ink-2);max-width:40em}
+.tags{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.tags li{font:500 12px/1 var(--f-mono);padding:8px 12px;border-radius:999px;border:1px solid var(--line);color:var(--ink-2)}
+.tags li.k{border-color:var(--accent);color:var(--accent)}
+
+/* tech */
+.tech{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:clamp(24px,4vw,56px);align-items:start}
+.panel{margin:0;display:grid;gap:18px;padding:clamp(20px,3vw,32px);background:var(--paper);border:1px solid var(--line);border-radius:20px;min-width:0}
+.panel-h{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 16px}
+.panel-h h3{font:600 1.35rem/1.2 var(--f-display)}
+.panel-h span{font:400 12px/1.4 var(--f-mono);color:var(--ink-2)}
+#acc{display:block;width:100%;height:190px}
+.panel figcaption{font:400 12px/1.55 var(--f-mono);color:var(--ink-2)}
+.panel p{color:var(--ink-2)}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;border-top:1px solid var(--line);padding-top:18px}
+.facts div{display:grid;gap:4px;min-width:0}
+.facts b{font:500 15px/1.2 var(--f-mono);color:var(--ink)}
+.facts span{font-size:13px;line-height:1.4;color:var(--ink-2)}
+.tech-list{display:grid}
+.tech-list article{display:grid;gap:8px;padding-block:24px;border-top:1px solid var(--line)}
+.tech-list article:first-child{padding-top:4px;border-top:0}
+.tech-list p{color:var(--ink-2)}
+
+/* launch */
+.status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(24px,4vw,56px)}
+.col-h{font:500 12px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);margin:0 0 12px}
+.checks{list-style:none;margin:0;padding:0;display:grid}
+.checks li{display:grid;grid-template-columns:16px minmax(0,1fr);gap:14px;align-items:start;padding-block:14px;border-top:1px solid var(--line)}
+.checks li::before{content:"";width:14px;height:14px;margin-top:6px;border-radius:50%;border:2px solid var(--accent)}
+.done li::before{background:var(--accent)}
+.wip li::before{background:conic-gradient(var(--accent) 0 50%,transparent 0)}
+.route{display:grid;gap:28px;margin-top:clamp(56px,7vw,88px)}
+.stops{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px}
+.stops li{position:relative;display:grid;gap:10px;align-content:start}
+.dot{width:20px;height:20px;border-radius:50%;border:3px solid var(--accent);background:var(--paper)}
+.stops li:last-child .dot{background:var(--accent);box-shadow:0 0 0 5px var(--accent-soft)}
+.stops li:not(:last-child)::after{content:"";position:absolute;top:9px;left:30px;right:-22px;border-top:2px dashed var(--accent);opacity:.55}
+.stops b{font:600 1.1rem/1.3 var(--f-body)}
+.stops p{color:var(--ink-2);font-size:16px}
+.note{font:400 12.5px/1.5 var(--f-mono);color:var(--ink-2)}
+
+/* cta */
+.cta{position:relative;overflow:hidden;isolation:isolate;background:var(--accent);color:var(--accent-ink);scroll-margin-top:64px}
+.cta .wrap{display:grid;gap:22px;justify-items:start;padding-block:clamp(64px,8vw,104px)}
+.cta h2{max-width:15ch}
+.cta p{max-width:32em;font-size:1.08rem;opacity:.88}
+.cta .btn{background:var(--accent-ink);color:var(--accent);border-color:var(--accent-ink)}
+.cta .btn:hover{box-shadow:0 12px 26px -12px rgba(0,0,0,.45)}
+.cta .btn-ghost{background:transparent;color:var(--accent-ink);border-color:var(--accent-ink)}
+.cta :focus-visible{outline-color:var(--accent-ink)}
+.cta-rings{position:absolute;right:-140px;top:50%;width:560px;height:560px;transform:translateY(-50%);z-index:-1;color:var(--accent-ink);opacity:.2}
+.cta-rings circle{fill:none;stroke:currentColor;stroke-width:1.5}
+
+.foot .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 24px;padding-block:28px;font:400 12px/1.5 var(--f-mono);color:var(--ink-2)}
+
+/* responsive */
+@media (max-width:900px){
+  .links{display:none}
+  .nav-in .btn-sm{margin-left:auto}
+  .hero-in{grid-template-columns:minmax(0,1fr)}
+  .hero-map{-webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,.35),#000 70%);mask-image:linear-gradient(180deg,rgba(0,0,0,.35),#000 70%)}
+  .phone{width:min(290px,100%)}
+  .steps{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:40px}
+  .steps li::after{display:none}
+  .tech{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:860px){
+  .split{grid-template-columns:minmax(0,1fr)}
+  .split-h{position:static}
+}
+@media (max-width:760px){
+  .layer{grid-template-columns:72px minmax(0,1fr);align-items:start}
+  .scale{width:72px;height:72px}
+  .tags{grid-column:2;justify-content:flex-start}
+  .status-grid{grid-template-columns:minmax(0,1fr)}
+  .stops{grid-template-columns:minmax(0,1fr);gap:28px}
+  .stops li{padding-left:38px}
+  .dot{position:absolute;left:0;top:2px}
+  .stops li:not(:last-child)::after{top:28px;bottom:-26px;left:9px;right:auto;border-top:0;border-left:2px dashed var(--accent)}
+  .cta-rings{right:-300px}
+}
+@media (max-width:520px){
+  .steps{grid-template-columns:minmax(0,1fr)}
+  .facts{grid-template-columns:minmax(0,1fr);gap:10px}
+  .facts div{grid-template-columns:110px minmax(0,1fr);align-items:baseline}
+}
+@media (prefers-reduced-motion: reduce){
+  .pin-in,.me::after{animation:none}
+  .btn{transition:none}
+}
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="logo" href="#top" aria-label="LiMo, наверх">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="none" stroke="var(--accent)" stroke-width="2.5"/><circle cx="12" cy="12" r="4" fill="var(--accent)"/></svg>
+      LiMo
+    </a>
+    <nav class="links" aria-label="Разделы">
+      <a href="#idea">Идея</a>
+      <a href="#how">Как работает</a>
+      <a href="#layers">Слои</a>
+      <a href="#tech">Технологии</a>
+      <a href="#launch">Статус</a>
+    </nav>
+    <a class="btn btn-sm" href="#contact">Хочу в бету</a>
+  </div>
+</header>
+
+<main>
+<section class="hero" id="top">
+  <svg class="hero-map" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><pattern id="hb" width="64" height="52" patternUnits="userSpaceOnUse"><rect class="m-block" x="5" y="5" width="54" height="42" rx="4"/></pattern></defs>
+    <rect class="m-bg" width="1200" height="700"/>
+    <rect width="1200" height="700" fill="url(#hb)"/>
+    <path class="m-park" d="M760 70 C850 30 970 70 995 150 C1020 235 930 295 845 272 C770 252 690 150 760 70Z"/>
+    <path class="m-park" d="M1080 520 C1140 490 1230 520 1230 600 L1230 720 L1040 720 C1020 640 1030 545 1080 520Z"/>
+    <path class="m-water" d="M540 780 C610 630 700 565 820 545 C960 520 1040 440 1250 430"/>
+    <path class="m-road-s" d="M-20 520 L1220 600"/>
+    <path class="m-road-s" d="M300 -20 L360 720"/>
+    <path class="m-road-s" d="M1110 -20 L1180 720"/>
+    <path class="m-road-s" d="M480 -20 L1220 255"/>
+    <path class="m-road-s" d="M820 380 L1220 330"/>
+    <path class="m-road" d="M-20 205 L1220 420"/>
+    <path class="m-road" d="M640 -20 L720 720"/>
+    <path class="m-road" d="M985 -20 L905 720"/>
+  </svg>
+
+  <div class="wrap hero-in">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="rec" aria-hidden="true"></span>iOS · готовим закрытую бету</p>
+      <h1>Карта живых видео вокруг тебя</h1>
+      <p class="lead">LiMo показывает на карте короткие видео, снятые рядом с тобой: каток, концерт, ярмарку, очередь. Открыл карту и сразу понял, где сейчас интересно и стоит ли туда идти.</p>
+      <div class="cta-row">
+        <a class="btn" href="#contact">Хочу в бету</a>
+        <a class="btn btn-ghost" href="#how">Как это работает</a>
+      </div>
+      <p class="coords">55.8297° N · 37.6338° E · Москва</p>
+    </div>
+
+    <div class="phone-col">
+      <div class="phone" role="img" aria-label="Демо интерфейса LiMo: карта района с видео-метками вокруг пользователя">
+        <div class="screen">
+          <svg class="map" viewBox="0 0 300 620" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <defs><pattern id="pb" width="38" height="32" patternUnits="userSpaceOnUse"><rect class="m-block" x="3" y="3" width="32" height="26" rx="3"/></pattern></defs>
+            <rect class="m-bg" width="300" height="620"/>
+            <rect width="300" height="620" fill="url(#pb)"/>
+            <path class="m-park" d="M172 112 C222 88 292 104 306 166 L306 252 C262 272 200 252 180 212 C160 176 150 128 172 112Z"/>
+            <path class="m-water" d="M-20 478 C60 438 112 506 182 476 S282 404 330 424"/>
+            <path class="m-road-s" d="M-20 362 L320 392"/>
+            <path class="m-road-s" d="M232 -20 L252 640"/>
+            <path class="m-road-s" d="M42 -20 L22 640"/>
+            <path class="m-road-s" d="M-20 566 L320 546"/>
+            <path class="m-road" d="M-20 150 L320 292"/>
+            <path class="m-road" d="M110 -20 L142 640"/>
+            <circle class="radius" cx="150" cy="300" r="118"/>
+          </svg>
+
+          <div class="island" aria-hidden="true"></div>
+          <div class="status" aria-hidden="true">
+            <span>9:41</span>
+            <svg viewBox="0 0 52 16" fill="currentColor"><rect x="0" y="10" width="3" height="5" rx="1"/><rect x="5" y="7" width="3" height="8" rx="1"/><rect x="10" y="4" width="3" height="11" rx="1"/><rect x="15" y="1" width="3" height="14" rx="1"/><rect x="25" y="2" width="22" height="12" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="27.5" y="4.5" width="15" height="7" rx="1.8"/><rect x="48.5" y="6" width="2" height="4" rx="1"/></svg>
+          </div>
+          <div class="search" aria-hidden="true">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><path d="M13 13l5 5"/></svg>
+            ВДНХ, Москва
+            <span class="r">500 м</span>
+          </div>
+
+          <div class="pin" style="left:30%;top:36%"><div class="pin-in" style="animation-delay:-1s"><div class="thumb" style="background:var(--v1)"><span class="t">2 мин</span></div><div class="tail"></div></div></div>
+          <div class="pin" style="left:73%;top:29%"><div class="pin-in" style="animation-delay:-4s"><div class="thumb" style="background:var(--v3)"><span class="t">6 мин</span></div><div class="tail"></div></div></div>
+          <div class="pin" style="left:66%;top:59%"><div class="pin-in" style="animation-delay:-7s"><div class="thumb" style="background:var(--v2)"><span class="t">11 мин</span></div><div class="tail"></div></div></div>
+          <div class="pin" style="left:24%;top:61%"><div class="pin-in" style="animation-delay:-9.4s"><div class="thumb" style="background:var(--v4)"><span class="t">18 мин</span></div><div class="tail"></div></div></div>
+          <div class="pin" style="left:46%;top:24%"><div class="pin-in" style="animation-delay:-2.6s"><div class="thumb" style="background:var(--v5)"><span class="t">25 мин</span></div><div class="tail"></div></div></div>
+          <div class="me" aria-hidden="true"></div>
+
+          <div class="sheet" aria-hidden="true">
+            <div class="grab"></div>
+            <div class="sheet-h"><b>Рядом сейчас</b><span>5 видео · 500 м</span></div>
+            <div class="clips">
+              <div class="clip"><div class="ct" style="background:var(--v1)"></div><b>Каток на ВДНХ</b><span>2 мин · 180 м</span></div>
+              <div class="clip"><div class="ct" style="background:var(--v3)"></div><b>Ярмарка в парке</b><span>6 мин · 420 м</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="phone-cap">демо интерфейса</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="idea">
+  <div class="wrap split">
+    <div class="split-h">
+      <p class="kicker">Проблема</p>
+      <h2>Короткие видео снимают все. Но узнать по ним, что происходит рядом, нельзя.</h2>
+    </div>
+    <div class="points">
+      <article>
+        <h3>Ленты сделаны для залипания</h3>
+        <p>Ленты коротких видео подбирают ролики со всего мира. Понять по ним, что сейчас происходит в соседнем квартале, не получится.</p>
+      </article>
+      <article>
+        <h3>Карты знают места, но не момент</h3>
+        <p>В картах есть адрес, часы работы и отзывы годовой давности. Идёт ли там концерт, работает ли каток, большая ли очередь, из них не узнать.</p>
+      </article>
+      <article>
+        <h3>Свои видео теряются в галерее</h3>
+        <p>Сотни роликов с прогулок и поездок лежат в телефоне без контекста. Где и когда это было, через месяц уже не вспомнить.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="sec band" id="how">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="kicker">Как работает</p>
+      <h2>От карты до видео за пару секунд</h2>
+    </div>
+    <ol class="steps">
+      <li><span class="n">1</span><h3>Открой карту</h3><p>Вокруг тебя метки с видео, снятыми неподалёку. Нажал на метку и видишь, что там происходит.</p></li>
+      <li><span class="n">2</span><h3>Встряхни телефон</h3><p>Камера открывается жестом, без поиска кнопок. Встряхивание распознаёт собственная ML-модель.</p></li>
+      <li><span class="n">3</span><h3>Сними видео</h3><p>Ролик привязывается к месту: кафе, парку, площади. Поэтому его легко найти, даже если GPS неточен.</p></li>
+      <li><span class="n">4</span><h3>Публичное исчезает</h3><p>Видео в общем слое живут недолго. На карте остаётся только то, что актуально.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section class="sec" id="layers">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="kicker">Три слоя</p>
+      <h2>Польза с первого пользователя</h2>
+      <p>Соцсети на карте обычно умирают пустыми: пока вокруг нет людей, смотреть нечего. LiMo полезен даже одному человеку, а социальные слои подключаются по мере того, как рядом появляются пользователи.</p>
+    </div>
+    <div class="layers">
+      <div class="layer">
+        <svg class="scale" viewBox="0 0 120 120" aria-hidden="true"><circle class="ring" cx="60" cy="60" r="54"/><circle class="ring" cx="60" cy="60" r="34"/><circle class="ring on" cx="60" cy="60" r="16"/><circle class="c" cx="60" cy="60" r="4"/></svg>
+        <div>
+          <p class="zl">масштаб: дом</p>
+          <h3>Личный</h3>
+          <p class="d">Гео-дневник. LiMo импортирует видео из галереи и раскладывает их по карте по GPS-меткам из файлов. Работает, даже если больше никто из знакомых приложением не пользуется.</p>
+        </div>
+        <ul class="tags"><li class="k">хранится всегда</li><li>видишь только ты</li></ul>
+      </div>
+      <div class="layer">
+        <svg class="scale" viewBox="0 0 120 120" aria-hidden="true"><circle class="ring" cx="60" cy="60" r="54"/><circle class="ring on" cx="60" cy="60" r="34"/><circle class="ring" cx="60" cy="60" r="16"/><circle class="c" cx="60" cy="60" r="4"/></svg>
+        <div>
+          <p class="zl">масштаб: квартал</p>
+          <h3>Друзья</h3>
+          <p class="d">Видео друзей на карте. Видно, где сейчас компания и что там происходит, без переписки «вы где?».</p>
+        </div>
+        <ul class="tags"><li>видят друзья</li></ul>
+      </div>
+      <div class="layer">
+        <svg class="scale" viewBox="0 0 120 120" aria-hidden="true"><circle class="ring on" cx="60" cy="60" r="54"/><circle class="ring" cx="60" cy="60" r="34"/><circle class="ring" cx="60" cy="60" r="16"/><circle class="c" cx="60" cy="60" r="4"/></svg>
+        <div>
+          <p class="zl">масштаб: район</p>
+          <h3>Район</h3>
+          <p class="d">Публичные видео от людей поблизости. Отвечают на вопрос, где сейчас движ, и быстро исчезают, чтобы карта не превращалась в архив.</p>
+        </div>
+        <ul class="tags"><li class="k">исчезает</li><li>видят все рядом</li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec band" id="tech">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="kicker">Технологии</p>
+      <h2>Как это устроено</h2>
+    </div>
+    <div class="tech">
+      <figure class="panel">
+        <div class="panel-h">
+          <h3>Встряхни и снимай</h3>
+          <span>CMMotionManager → логистическая регрессия</span>
+        </div>
+        <canvas id="acc" role="img" aria-label="Схема сигнала акселерометра: спокойный участок, всплеск колебаний при встряхивании и снова спокойный участок"></canvas>
+        <figcaption>Схема сигнала: ускорение по оси X за 2 секунды. Подсвечено окно, где срабатывает жест, точки отмечают смену знака.</figcaption>
+        <p>Собственный детектор жеста. Сигнал акселерометра фильтруется по смене знака, решение принимает логистическая регрессия. Так камера открывается одним движением, а случайные толчки в кармане не срабатывают.</p>
+        <div class="facts">
+          <div><b>~300</b><span>вручную размеченных примеров</span></div>
+          <div><b>GroupKFold</b><span>кросс-валидация по группам</span></div>
+          <div><b>1 жест</b><span>вместо кнопки записи</span></div>
+        </div>
+      </figure>
+      <div class="tech-list">
+        <article>
+          <h3>Привязка к местам</h3>
+          <p>Видео привязано к точке интереса: заведению, парку, станции. В центре Москвы GPS может ошибаться на сотни метров, а место остаётся местом.</p>
+        </article>
+        <article>
+          <h3>Реалтайм заложен с первого дня</h3>
+          <p>Живые функции уже есть в схеме данных. Они скрыты и включаются в районе, когда там набирается достаточно людей. Пустую карту пользователь не увидит.</p>
+        </article>
+        <article>
+          <h3>Безопасность по умолчанию</h3>
+          <p>Координаты автора размываются, публикация идёт с задержкой, есть возрастные ограничения. По видео нельзя понять, где человек находится прямо сейчас.</p>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="launch">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="kicker">Статус</p>
+      <h2>Где проект сейчас</h2>
+      <p>Гео-продукту нужна плотность: много людей на небольшой территории. Поэтому запускаемся точечно и расширяемся от узкого круга к широкому.</p>
+    </div>
+    <div class="status-grid">
+      <div>
+        <h3 class="col-h">Сделано</h3>
+        <ul class="checks done">
+          <li>Концепция и архитектура трёх слоёв</li>
+          <li>Модель данных с местами и скрытым реалтаймом</li>
+          <li>Детектор жеста встряхивания на ML</li>
+          <li>Разбор конкурентов: Corner, Blink, Mapstr, Beli, лента 2ГИС</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="col-h">В работе</h3>
+        <ul class="checks wip">
+          <li>Логика iOS-приложения</li>
+          <li>Рекомендации на эвристиках</li>
+          <li>Аналитика использования</li>
+          <li>Базовый бэкенд</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="route">
+      <h3 class="col-h">Маршрут запуска</h3>
+      <ol class="stops">
+        <li><span class="dot" aria-hidden="true"></span><b>TestFlight</b><p>Закрытая бета для 20–30 компаний друзей. Смотрим, как приложением пользуются на самом деле.</p></li>
+        <li><span class="dot" aria-hidden="true"></span><b>Университет</b><p>Запуск в одном вузе: плотная аудитория, общие места, много поводов снимать.</p></li>
+        <li><span class="dot" aria-hidden="true"></span><b>Telegram-каналы</b><p>Партнёрства с авторами каналов, где аудитория от сотен до тысяч человек с iPhone.</p></li>
+      </ol>
+      <p class="note">Android — после проверки гипотезы на iOS.</p>
+    </div>
+  </div>
+</section>
+
+<section class="cta" id="contact">
+  <svg class="cta-rings" viewBox="0 0 560 560" aria-hidden="true"><circle cx="280" cy="280" r="60"/><circle cx="280" cy="280" r="130" stroke-dasharray="4 7"/><circle cx="280" cy="280" r="200"/><circle cx="280" cy="280" r="270" stroke-dasharray="4 7"/></svg>
+  <div class="wrap">
+    <p class="kicker" style="color:inherit">Бета</p>
+    <h2>Попробуй LiMo одним из первых</h2>
+    <p>Набираем людей в закрытую бету и открыты к разговору с партнёрами и инвесторами.</p>
+    <div class="cta-row">
+      <a class="btn" href="https://t.me/D1NgLo" target="_blank" rel="noopener">
+        Telegram @D1NgLo
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg>
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/DiNgLo23" target="_blank" rel="noopener">
+        GitHub
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 14L14 6M7 6h7v7"/></svg>
+      </a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>© 2026 LiMo</span>
+    <span>Москва · 55.8297° N 37.6338° E</span>
+    <span>iOS-приложение в разработке</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  // active nav link
+  var links=[].slice.call(document.querySelectorAll('.links a'));
+  if('IntersectionObserver' in window && links.length){
+    var byId={};
+    links.forEach(function(a){byId[a.getAttribute('href').slice(1)]=a;});
+    var io=new IntersectionObserver(function(es){
+      es.forEach(function(e){
+        if(!e.isIntersecting) return;
+        links.forEach(function(a){a.removeAttribute('aria-current');});
+        var a=byId[e.target.id]; if(a) a.setAttribute('aria-current','true');
+      });
+    },{rootMargin:'-45% 0px -50% 0px'});
+    Object.keys(byId).forEach(function(id){var s=document.getElementById(id); if(s) io.observe(s);});
+  }
+
+  // accelerometer schematic
+  var cv=document.getElementById('acc');
+  if(!cv || !cv.getContext) return;
+  function draw(){
+    var r=cv.getBoundingClientRect(), W=r.width, H=r.height;
+    if(!W||!H) return;
+    var dpr=window.devicePixelRatio||1;
+    cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+    var c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,W,H);
+    var cs=getComputedStyle(document.documentElement);
+    function v(n){return cs.getPropertyValue(n).trim();}
+    var ink2=v('--ink-2'), line=v('--line'), acc=v('--accent'), soft=v('--accent-soft'), live=v('--live');
+    var pL=4,pR=4,pT=24,pB=24, pw=W-pL-pR, ph=H-pT-pB, y0=pT+ph/2;
+    function X(t){return pL+t/2*pw;}
+    function Y(s){return y0-s*(ph/2)*0.9;}
+    var a=0.78,b=1.32;
+
+    c.fillStyle=soft; c.fillRect(X(a),pT-6,X(b)-X(a),ph+12);
+    c.strokeStyle=line; c.lineWidth=1; c.setLineDash([3,4]);
+    c.beginPath(); c.moveTo(pL,y0); c.lineTo(W-pR,y0); c.stroke(); c.setLineDash([]);
+
+    c.font='500 11px "Martian Mono", ui-monospace, monospace';
+    c.fillStyle=ink2; c.textAlign='left'; c.fillText('ускорение X',pL,13);
+    c.fillStyle=acc; c.textAlign='center'; c.fillText('окно жеста',(X(a)+X(b))/2,13);
+    c.fillStyle=ink2;
+    [0,1,2].forEach(function(s){c.textAlign=s===0?'left':(s===2?'right':'center'); c.fillText(s+' с',X(s),H-6);});
+
+    var seed=11; function rnd(){seed=(seed*16807)%2147483647; return seed/2147483647-.5;}
+    var N=520, pts=[], n=0;
+    for(var i=0;i<=N;i++){
+      var t=2*i/N; n=.82*n+.18*rnd()*1.4;
+      var env=(t>a&&t<b)?Math.sin(Math.PI*(t-a)/(b-a)):0;
+      pts.push([t, n*.55 + env*.95*Math.sin(2*Math.PI*11*(t-a)), env]);
+    }
+    function path(){c.beginPath(); pts.forEach(function(p,i){var x=X(p[0]),y=Y(p[1]); if(i) c.lineTo(x,y); else c.moveTo(x,y);});}
+    c.lineJoin='round';
+    path(); c.strokeStyle=ink2; c.globalAlpha=.7; c.lineWidth=1.4; c.stroke(); c.globalAlpha=1;
+    c.save(); c.beginPath(); c.rect(X(a),0,X(b)-X(a),H); c.clip();
+    path(); c.strokeStyle=acc; c.lineWidth=2.2; c.stroke(); c.restore();
+
+    c.fillStyle=live;
+    for(var k=1;k<pts.length;k++){
+      var p0=pts[k-1], p1=pts[k];
+      if(p1[2]>.18 && (p0[1]<0)!==(p1[1]<0)){
+        var tz=p0[0]+(p1[0]-p0[0])*(p0[1]/(p0[1]-p1[1]));
+        c.beginPath(); c.arc(X(tz),y0,3.2,0,Math.PI*2); c.fill();
+      }
+    }
+  }
+  draw();
+  if('ResizeObserver' in window) new ResizeObserver(draw).observe(cv); else window.addEventListener('resize',draw);
+  try{ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw); }catch(e){}
+  new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+})();
+</script>
+</body>
+</html>
